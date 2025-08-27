@@ -31,7 +31,7 @@ export default function Game({ selectedLevel, onBackToMenu }: GameProps) {
   };
 
   return (
-    <div className="w-full h-full bg-gray-800 flex items-center justify-center relative">
+    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
       <PhaserGame
         ref={phaserRef}
         currentActiveScene={currentActiveScene}

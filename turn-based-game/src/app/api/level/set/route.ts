@@ -16,13 +16,13 @@ export async function POST(request: NextRequest) {
 
     // Set the current level on the server
     gameState.setCurrentLevel(levelData);
-    
+
     // Set position to the level's starting position
     gameState.setPosition(levelData.starting_position);
-    
+
     // Broadcast the position update to all clients
     broadcastPositionUpdate();
-    
+
     return NextResponse.json({
       success: true,
       data: {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         currentPosition: gameState.getPosition()
       }
     });
-    
+
   } catch (error) {
     console.error('Error setting level:', error);
     return NextResponse.json({

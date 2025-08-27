@@ -4,7 +4,7 @@ Game API client for communicating with the Next.js turn-based game.
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import requests
 
@@ -17,75 +17,93 @@ class GameClient:
     def __init__(self, base_url: str = "http://localhost:3000/api"):
         self.base_url = base_url
 
-    def move_character(self, direction: str) -> Dict[str, Any]:
-        """Move the player character in the specified direction."""
+    def multi_move(
+        self, direction: str, steps: int, agent_index: int = 0
+    ) -> Dict[str, Any]:
+        """Move character multiple steps in one direction."""
         url = f"{self.base_url}/character/multi-move"
-        payload = {"direction": direction, "steps": 1}
+        payload = {"direction": direction, "steps": steps, "agentIndex": agent_index}
 
-        logger.info(f"📤 [MOVE] Sending request to {url}")
-        logger.info(f"📤 [MOVE] Payload: {json.dumps(payload, indent=2)}")
+        response = requests.post(url, json=payload)
+        response_data = response.json()
 
-        try:
-            response = requests.post(url, json=payload)
-            response_data = response.json()
+        logger.info(
+            f"📥 [MULTI_MOVE] Response data: {json.dumps(response_data, indent=2)}"
+        )
 
-            logger.info(f"📥 [MOVE] Response status: {response.status_code}")
-            logger.info(
-                f"📥 [MOVE] Response data: {json.dumps(response_data, indent=2)}"
-            )
+        return response_data
 
-            return response_data
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ [MOVE] Request failed: {str(e)}")
-            return {"success": False, "error": f"Request failed: {str(e)}"}
+    def reset_position(self) -> Dict[str, Any]:
+        """Reset character position to starting position."""
+        url = f"{self.base_url}/character/reset"
 
-    def attack_target(self, x: int, y: int) -> Dict[str, Any]:
-        """Attack a target at the specified coordinates."""
-        url = f"{self.base_url}/character/attack"
-        payload = {"target": {"x": x, "y": y}}
+        response = requests.post(url)
+        response_data = response.json()
 
-        logger.info(f"🎯 [ATTACK] Sending request to {url}")
-        logger.info(f"🎯 [ATTACK] Payload: {json.dumps(payload, indent=2)}")
+        logger.info(f"📥 [RESET] Response data: {json.dumps(response_data, indent=2)}")
 
-        try:
-            response = requests.post(url, json=payload)
-            response_data = response.json()
+        return response_data
 
-            logger.info(f"📥 [ATTACK] Response status: {response.status_code}")
-            logger.info(
-                f"📥 [ATTACK] Response data: {json.dumps(response_data, indent=2)}"
-            )
+    def switch_agent(self, agent_index: int) -> Dict[str, Any]:
+        """Switch to a different agent."""
+        url = f"{self.base_url}/character/switch-agent"
+        payload = {"agentIndex": agent_index}
 
-            return response_data
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ [ATTACK] Request failed: {str(e)}")
-            return {"success": False, "error": f"Request failed: {str(e)}"}
+        response = requests.post(url, json=payload)
+        response_data = response.json()
 
-    def scan_field(self) -> Dict[str, Any]:
-        """Scan the game field for enemies, obstacles, and other information."""
+        logger.info(
+            f"📥 [SWITCH_AGENT] Response data: {json.dumps(response_data, indent=2)}"
+        )
+
+        return response_data
+
+    def use_button(self) -> Dict[str, Any]:
+        """Press button to activate bridges."""
+        url = f"{self.base_url}/character/use-button"
+
+        response = requests.post(url)
+        response_data = response.json()
+
+        logger.info(
+            f"📥 [USE_BUTTON] Response data: {json.dumps(response_data, indent=2)}"
+        )
+
+        return response_data
+
+    def use_computer(self) -> Dict[str, Any]:
+        """Use computer to complete the level."""
+        url = f"{self.base_url}/character/use-pc"
+
+        response = requests.post(url)
+        response_data = response.json()
+
+        logger.info(f"📥 [USE_PC] Response data: {json.dumps(response_data, indent=2)}")
+
+        return response_data
+
+    def get_level_info(self) -> Dict[str, Any]:
+        """Get current level information and layout."""
+        url = f"{self.base_url}/level/info"
+
+        response = requests.get(url)
+        response_data = response.json()
+
+        logger.info(
+            f"📥 [LEVEL_INFO] Response data: {json.dumps(response_data, indent=2)}"
+        )
+
+        return response_data
+
+    def get_game_state(self) -> Dict[str, Any]:
+        """Get current game state including all agents and positions."""
         url = f"{self.base_url}/character/multi-move"
 
-        logger.info(f"🔍 [SCAN] Sending request to {url}")
+        response = requests.get(url)
+        response_data = response.json()
 
-        try:
-            response = requests.get(url)
-            response_data = response.json()
+        logger.info(
+            f"📥 [GAME_STATE] Response data: {json.dumps(response_data, indent=2)}"
+        )
 
-            return response_data
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ [SCAN] Request failed: {str(e)}")
-            return {"success": False, "error": f"Request failed: {str(e)}"}
-
-    def get_player_position(self) -> Optional[Dict[str, int]]:
-        """Get the current player position."""
-        scan_result = self.scan_field()
-        if scan_result.get("success") and "data" in scan_result:
-            return scan_result["data"].get("playerPosition")
-        return None
-
-    def get_nearby_enemies(self) -> list:
-        """Get list of nearby enemies."""
-        scan_result = self.scan_field()
-        if scan_result.get("success") and "data" in scan_result:
-            return scan_result["data"].get("nearbyCharacters", [])
-        return []
+        return response_data.get("data", {})

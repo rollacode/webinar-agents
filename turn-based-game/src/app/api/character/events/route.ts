@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     start(controller) {
       // Add client to the set
       clients.add(controller);
-      
+
       // Send initial position data
       const initialMessage = `data: ${JSON.stringify({
         type: 'position_update',
@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
         map: gameState.getCurrentLevel().layout,
         timestamp: Date.now()
       })}\n\n`;
-      
+
       controller.enqueue(new TextEncoder().encode(initialMessage));
-      
+
       // Handle client disconnect
       request.signal.addEventListener('abort', () => {
         clients.delete(controller);

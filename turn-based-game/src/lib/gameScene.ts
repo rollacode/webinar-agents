@@ -45,17 +45,17 @@ export class GameScene {
     this.tileSize = tileSize;
     this.levelData = levelData;
     this.onBackToMenu = onBackToMenu;
-    
+
     // Initialize agents based on level data
     this.agentPositions = [levelData.starting_position];
     this.serverAgentPositions = [levelData.starting_position];
-    
+
     if (levelData.starting_position_2) {
       this.agentPositions.push(levelData.starting_position_2);
       this.serverAgentPositions.push(levelData.starting_position_2);
       this.agentCount = 2;
     }
-    
+
     // Notify server about the level change
     this.setLevelOnServer(levelData);
   }
@@ -64,18 +64,18 @@ export class GameScene {
     this.scene.load.image('tileset', '/main_tiles.jpg');
     this.scene.load.image('tileset2', '/main_tiles2.jpg');
     this.scene.load.image('agent', '/agent.png');
-    
+
     // Set texture filtering for better quality
     this.scene.load.on('filecomplete-image-tileset', () => {
       const texture = this.scene.textures.get('tileset');
       texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     });
-    
+
     this.scene.load.on('filecomplete-image-tileset2', () => {
       const texture = this.scene.textures.get('tileset2');
       texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     });
-    
+
     this.scene.load.on('filecomplete-image-agent', () => {
       const texture = this.scene.textures.get('agent');
       texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
@@ -95,7 +95,7 @@ export class GameScene {
     const screenHeight = this.scene.cameras.main.height;
     const offsetX = (screenWidth - levelWidth) / 2;
     const offsetY = (screenHeight - levelHeight) / 2;
-    
+
     // Store offsets for use in other methods
     this.offsetX = offsetX;
     this.offsetY = offsetY;
@@ -122,7 +122,7 @@ export class GameScene {
             colIndex,
             rowIndex
           );
-          
+
           // Store bridge tiles separately for updates
           if (tile === 'Z') {
             const tileKey = `${colIndex}_${rowIndex}`;
@@ -154,7 +154,7 @@ export class GameScene {
 
     // Create sprite with the frame
     const tile = this.scene.add.sprite(x + this.tileSize / 2, y + this.tileSize / 2, uv.tileset, frameName);
-    
+
     // NOW set display size after frame is set
     tile.setDisplaySize(this.tileSize, this.tileSize);
 
@@ -172,15 +172,15 @@ export class GameScene {
 
       const sprite = this.scene.add.sprite(agentX, agentY, 'agent');
       sprite.setDisplaySize(this.tileSize * 0.8, this.tileSize * 0.8);
-      
+
       // Make inactive agents slightly transparent
       if (i !== this.activeAgent) {
         sprite.setAlpha(0.6);
       }
-      
+
       // Improve agent sprite quality 
       sprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-      
+
       this.agentSprites.push(sprite);
       container.add(sprite);
     }
@@ -193,19 +193,20 @@ export class GameScene {
       this.eventSource.close();
       this.eventSource = undefined;
     }
-    
+
     // Server-Sent Events (SSE) connection for real-time position updates
     this.eventSource = new EventSource('/api/character/events');
-    
+
     this.eventSource.onopen = () => {
       console.log('SSE connected');
     };
-    
+
     this.eventSource.onmessage = (event) => {
+      console.log('SSE raw message received:', event.data);
       try {
         const data = JSON.parse(event.data);
         console.log('SSE data received:', data);
-        
+
         if (data.agents) {
           // Update all agent positions from server
           this.serverAgentPositions = data.agents;
@@ -216,16 +217,16 @@ export class GameScene {
           this.serverAgentPositions[this.activeAgent] = data.position;
           this.updateAgentPosition(offsetX, offsetY);
         }
-        
+
         // Always check bridge state (not just when agents data exists)
         if (data.bridgesActivated !== undefined) {
           console.log('Bridge state from SSE:', data.bridgesActivated);
-          
+
           // Show effect only when bridges get activated (false -> true)
           if (!this.lastBridgeState && data.bridgesActivated) {
             this.showBridgeActivationEffect();
           }
-          
+
           this.lastBridgeState = data.bridgesActivated;
           this.updateBridgeVisuals(data.bridgesActivated);
         }
@@ -233,14 +234,15 @@ export class GameScene {
         console.error('Failed to parse SSE data:', error);
       }
     };
-    
+
     this.eventSource.onerror = (error) => {
       console.error('SSE error:', error);
     };
   }
 
   private updateAgentPosition(offsetX: number, offsetY: number): void {
-    // Update all agent positions and visuals
+    console.log('Updating agent positions:', this.serverAgentPositions);
+
     for (let i = 0; i < this.serverAgentPositions.length; i++) {
       const newPosition = this.serverAgentPositions[i];
       const oldPosition = this.agentPositions[i];
@@ -330,9 +332,8 @@ export class GameScene {
       });
 
       const result = await response.json();
-      
+
       if (result.success) {
-        // The position update will be handled by the WebSocket/SSE events
         console.log('Movement successful:', result);
       } else {
         console.log('Movement failed:', result.error);
@@ -356,7 +357,7 @@ export class GameScene {
       });
 
       let result = await response.json();
-      
+
       if (result.success) {
         console.log('Button pressed:', result.data);
         return; // Button worked, don't try computer
@@ -371,7 +372,7 @@ export class GameScene {
       });
 
       result = await response.json();
-      
+
       if (result.success) {
         console.log('Computer used:', result.data);
         if (result.data.level_completed) {
@@ -391,9 +392,9 @@ export class GameScene {
 
   private async switchAgent(): Promise<void> {
     if (this.agentCount <= 1) return;
-    
+
     const newAgentIndex = (this.activeAgent + 1) % this.agentCount;
-    
+
     try {
       const response = await fetch('/api/character/switch-agent', {
         method: 'POST',
@@ -406,7 +407,7 @@ export class GameScene {
       });
 
       const result = await response.json();
-      
+
       if (result.success) {
         console.log('Agent switched:', result.data);
         // Update UI to show new active agent
@@ -469,7 +470,7 @@ export class GameScene {
   private showVictoryScreen(): void {
     // Create victory overlay
     this.victoryContainer = this.scene.add.container(0, 0);
-    
+
     // Gradient background overlay (MainMenu style)
     const overlay = this.scene.add.rectangle(
       this.scene.cameras.main.centerX,
@@ -480,7 +481,7 @@ export class GameScene {
       0.95
     );
     overlay.setScrollFactor(0);
-    
+
     // Main panel (like MainMenu card style)
     const panelWidth = 450;
     const panelHeight = 400;
@@ -495,7 +496,7 @@ export class GameScene {
     // Rounded corners effect with border
     panel.setStrokeStyle(2, 0x4b5563); // gray-700 border
     panel.setScrollFactor(0);
-    
+
     // Title
     const titleText = this.scene.add.text(
       this.scene.cameras.main.centerX,
@@ -509,7 +510,7 @@ export class GameScene {
     );
     titleText.setOrigin(0.5);
     titleText.setScrollFactor(0);
-    
+
     // Subtitle
     const subtitleText = this.scene.add.text(
       this.scene.cameras.main.centerX,
@@ -523,7 +524,7 @@ export class GameScene {
     );
     subtitleText.setOrigin(0.5);
     subtitleText.setScrollFactor(0);
-    
+
     // Success message
     const successText = this.scene.add.text(
       this.scene.cameras.main.centerX,
@@ -537,11 +538,11 @@ export class GameScene {
     );
     successText.setOrigin(0.5);
     successText.setScrollFactor(0);
-    
+
     // Button container for spacing
     const buttonY = this.scene.cameras.main.centerY + 40;
     const buttonSpacing = 70;
-    
+
     // Back to Menu button (primary action - green gradient like MainMenu)
     const menuButton = this.scene.add.rectangle(
       this.scene.cameras.main.centerX,
@@ -553,7 +554,7 @@ export class GameScene {
     );
     menuButton.setScrollFactor(0);
     menuButton.setInteractive({ useHandCursor: true });
-    
+
     const menuText = this.scene.add.text(
       this.scene.cameras.main.centerX,
       buttonY,
@@ -566,7 +567,7 @@ export class GameScene {
     );
     menuText.setOrigin(0.5);
     menuText.setScrollFactor(0);
-    
+
     // Try Again button (secondary action)
     const tryAgainButton = this.scene.add.rectangle(
       this.scene.cameras.main.centerX,
@@ -578,7 +579,7 @@ export class GameScene {
     );
     tryAgainButton.setScrollFactor(0);
     tryAgainButton.setInteractive({ useHandCursor: true });
-    
+
     const tryAgainText = this.scene.add.text(
       this.scene.cameras.main.centerX,
       buttonY + buttonSpacing,
@@ -591,7 +592,7 @@ export class GameScene {
     );
     tryAgainText.setOrigin(0.5);
     tryAgainText.setScrollFactor(0);
-    
+
     // Button hover effects (MainMenu style)
     menuButton.on('pointerover', () => {
       menuButton.setFillStyle(0x059669); // green-600
@@ -603,7 +604,7 @@ export class GameScene {
         ease: 'Power2'
       });
     });
-    
+
     menuButton.on('pointerout', () => {
       menuButton.setFillStyle(0x10b981); // green-500
       this.scene.tweens.add({
@@ -614,7 +615,7 @@ export class GameScene {
         ease: 'Power2'
       });
     });
-    
+
     tryAgainButton.on('pointerover', () => {
       tryAgainButton.setFillStyle(0x2563eb); // blue-600
       this.scene.tweens.add({
@@ -625,7 +626,7 @@ export class GameScene {
         ease: 'Power2'
       });
     });
-    
+
     tryAgainButton.on('pointerout', () => {
       tryAgainButton.setFillStyle(0x3b82f6); // blue-500
       this.scene.tweens.add({
@@ -636,22 +637,22 @@ export class GameScene {
         ease: 'Power2'
       });
     });
-    
+
     // Button functionality
     menuButton.on('pointerdown', () => {
       this.goBackToMenu();
     });
-    
+
     tryAgainButton.on('pointerdown', () => {
       this.restartLevel();
     });
-    
+
     // Add all elements to container
     this.victoryContainer.add([
       overlay, panel, titleText, subtitleText, successText,
       menuButton, menuText, tryAgainButton, tryAgainText
     ]);
-    
+
     // Victory animation (fade in with scale effect like MainMenu)
     this.victoryContainer.setAlpha(0);
     this.victoryContainer.setScale(0.8);
@@ -671,10 +672,10 @@ export class GameScene {
       this.victoryContainer.destroy();
       this.victoryContainer = undefined;
     }
-    
+
     // Reset game state
     this.isGameWon = false;
-    
+
     // Reset position via API
     try {
       const response = await fetch('/api/character/reset', {
@@ -683,9 +684,9 @@ export class GameScene {
           'Content-Type': 'application/json',
         }
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         console.log('Game reset successfully:', result.data);
       } else {
@@ -713,7 +714,7 @@ export class GameScene {
       });
 
       const result = await response.json();
-      
+
       if (result.success) {
         console.log('Level set on server:', result.data);
       } else {
@@ -745,10 +746,10 @@ export class GameScene {
       strokeThickness: 3,
       shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 5, fill: true }
     });
-    
+
     floatingText.setOrigin(0.5);
     floatingText.setDepth(1000); // Always on top
-    
+
     // Floating animation
     this.scene.tweens.add({
       targets: floatingText,
@@ -768,20 +769,20 @@ export class GameScene {
     if (this.agentCount <= 1) return;
 
     this.agentIndicators = [];
-    
+
     for (let i = 0; i < this.agentCount; i++) {
       const container = this.scene.add.container(0, 0);
-      
+
       // Green glowing dot
       const dot = this.scene.add.circle(0, 0, 8, 0x00ff00);
       dot.setStrokeStyle(2, 0x00aa00);
-      
+
       // Pulsing glow effect
       const glow = this.scene.add.circle(0, 0, 12, 0x00ff00, 0.3);
-      
+
       container.add([glow, dot]);
       container.setDepth(999);
-      
+
       // Pulsing animation
       this.scene.tweens.add({
         targets: glow,
@@ -793,10 +794,10 @@ export class GameScene {
         repeat: -1,
         ease: 'Sine.easeInOut'
       });
-      
+
       this.agentIndicators.push(container);
     }
-    
+
     this.updateAgentIndicators();
   }
 
@@ -809,10 +810,10 @@ export class GameScene {
         // Use agent data position, not sprite position (which might be mid-animation)
         const worldX = this.offsetX + agentPosition.x * this.tileSize + this.tileSize / 2;
         const worldY = this.offsetY + agentPosition.y * this.tileSize + this.tileSize / 2;
-        
+
         // Position above agent
         indicator.setPosition(worldX, worldY - 35);
-        
+
         // Show only for active agent
         indicator.setVisible(index === this.activeAgent);
       }
@@ -825,11 +826,11 @@ export class GameScene {
     if (agentPosition) {
       const worldX = this.offsetX + agentPosition.x * this.tileSize + this.tileSize / 2;
       const worldY = this.offsetY + agentPosition.y * this.tileSize + this.tileSize / 2;
-      
+
       this.showFloatingText(
-        worldX, 
-        worldY - 30, 
-        '🌉 BRIDGES ACTIVATED!', 
+        worldX,
+        worldY - 30,
+        '🌉 BRIDGES ACTIVATED!',
         '#00ffff'
       );
     }
@@ -890,12 +891,12 @@ export class GameScene {
     if (agentPosition) {
       const worldX = this.offsetX + agentPosition.x * this.tileSize + this.tileSize / 2;
       const worldY = this.offsetY + agentPosition.y * this.tileSize + this.tileSize / 2;
-      
+
       // Victory text
       this.showFloatingText(
-        worldX, 
-        worldY - 30, 
-        '🏆 LEVEL COMPLETE!', 
+        worldX,
+        worldY - 30,
+        '🏆 LEVEL COMPLETE!',
         '#ffdd00'
       );
 
@@ -922,17 +923,17 @@ export class GameScene {
       this.eventSource.close();
       this.eventSource = undefined;
     }
-    
+
     if (this.victoryContainer) {
       this.victoryContainer.destroy();
       this.victoryContainer = undefined;
     }
-    
+
     if (this.switchAgentButton) {
       this.switchAgentButton.destroy();
       this.switchAgentButton = undefined;
     }
-    
+
     // Clean up agent indicators
     this.agentIndicators.forEach(indicator => {
       if (indicator) {
@@ -940,7 +941,7 @@ export class GameScene {
       }
     });
     this.agentIndicators = [];
-    
+
     // Clear bridge tile references
     this.bridgeTiles = {};
   }

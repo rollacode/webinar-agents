@@ -49,10 +49,10 @@ export async function POST(request: NextRequest) {
       if (moveCheck.canMove) {
         currentPos = nextPos;
         gameState.setPosition(currentPos, agentIndex);
-        
+
         // Broadcast position update to WebSocket clients
         broadcastPositionUpdate();
-        
+
         const targetTile = gameState.getEffectiveTileAt(currentPos.x, currentPos.y);
 
         // Check if reached computer
