@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "webinar-agents"
+version = "0.1.0"
+description = "Webinar project with turn-based game and AI agents"
+authors = ["Developer"]
+packages = [{include = "agents"}]
+
+[tool.poetry.dependencies]
+python = "^3.12.3"
+jupyter = "^1.0.0"
+notebook = "^7.0.0"
+langchain = "^0.2.0"
+langchain-community = "^0.2.0"
+langgraph = "^0.2.0"
+python-dotenv = "^1.0.0"
+requests = "^2.31.0"
+openai = "^1.0.0"
+types-requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.0.0"
+isort = "^5.13.0"
+flake8 = "^7.0.0"
+pytest = "^8.0.0"
+
+[tool.poetry.scripts]
+backend = "scripts.run_backend:main"
+frontend = "scripts.run_frontend:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
