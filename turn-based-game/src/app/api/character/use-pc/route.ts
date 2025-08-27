@@ -1,5 +1,6 @@
 import { gameState } from '@/lib/gameState';
 import { NextRequest, NextResponse } from 'next/server';
+import { broadcastComputerInteraction, broadcastPositionUpdate } from '../events/route';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Computer used successfully - level completed!
+    // Broadcast computer interaction event to all clients
+    broadcastComputerInteraction(true);
+
+    // Also broadcast position update for consistency
+    broadcastPositionUpdate();
+
     return NextResponse.json({
       success: true,
       data: {

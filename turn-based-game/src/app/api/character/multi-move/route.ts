@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
         // Check if reached computer
         if (targetTile === 'C') {
           levelCompleted = true;
+          // Don't broadcast computer interaction here - only when actually using the computer
         }
 
         const availableActions = gameState.getAvailableActions();

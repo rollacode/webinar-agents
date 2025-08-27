@@ -6,6 +6,8 @@ const clients = new Set<ReadableStreamDefaultController>();
 
 // Broadcast position updates to all connected clients
 export function broadcastPositionUpdate() {
+  console.log('Broadcasting position update event, clients count:', clients.size);
+
   const message = `data: ${JSON.stringify({
     type: 'position_update',
     agents: gameState.getAllAgentPositions(),
@@ -21,6 +23,30 @@ export function broadcastPositionUpdate() {
     try {
       controller.enqueue(new TextEncoder().encode(message));
     } catch (error) {
+      console.error('Error broadcasting position update:', error);
+      clients.delete(controller);
+    }
+  });
+}
+
+// Broadcast computer interaction events to all connected clients
+export function broadcastComputerInteraction(levelCompleted: boolean = false) {
+  console.log('Broadcasting computer interaction event:', { levelCompleted, clientsCount: clients.size });
+
+  const message = `data: ${JSON.stringify({
+    type: 'computer_interaction',
+    level_completed: levelCompleted,
+    position: gameState.getPosition(),
+    timestamp: Date.now()
+  })}\n\n`;
+
+  console.log('Computer interaction message:', message);
+
+  clients.forEach(controller => {
+    try {
+      controller.enqueue(new TextEncoder().encode(message));
+    } catch (error) {
+      console.error('Error broadcasting computer interaction:', error);
       clients.delete(controller);
     }
   });

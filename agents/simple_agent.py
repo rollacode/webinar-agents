@@ -27,7 +27,8 @@ from .tools import (
 )
 
 MAX_RECURSION_LIMIT = 30
-MODEL = "gpt-5-mini"
+MODEL = "gpt-5-nano-2025-08-07"
+TEMPERATURE = 1
 
 
 class SimpleAgentState(TypedDict):
@@ -46,7 +47,7 @@ class SimpleAgent:
         self,
         api_key: Optional[str] = None,
         game_url: str = "http://localhost:3000/api",
-        temperature: float = 1,
+        temperature: float = TEMPERATURE,
     ):
         self.game_client = GameClient(game_url)
         self.llm = ChatOpenAI(
@@ -135,7 +136,7 @@ class SimpleAgent:
                 - There may be multiple agents you can switch between
 
                 LEVEL OBJECTIVES:
-                1. Navigate through the level using platforms and ladders
+                1. Navigate through the level using platforms # and ladders |
                 2. Find and reach the computer (C) to complete the level
                 3. Use buttons if available to activate bridges
                 4. Switch between agents if there are multiple agents available
@@ -146,8 +147,6 @@ class SimpleAgent:
                 - use_button: Press button when standing on it (activates bridges)
                 - switch_agent: Switch to different agent by index
                 - reset_position: Reset to starting position (use if stuck)
-                - get_game_state: Get current positions and available actions
-                - get_level_info: Get level layout and information
 
                 STRATEGY:
                 1. First, get the level information to understand the layout
@@ -278,8 +277,7 @@ GAME STATE:
         messages = state.get("messages", [])
 
         prompt = f"""{decision_context}
-Current objective: {state.get("current_objective", "explore_and_find_computer")}
-"""
+hint: on ladders you need to move 1 step more up to be aligned with the platform to move left and right then"""
         messages.append(HumanMessage(content=prompt))
 
         self.logger.log_sent(prompt)
@@ -324,10 +322,6 @@ Current objective: {state.get("current_objective", "explore_and_find_computer")}
                 result = self.game_client.switch_agent(parameters["agent_index"])
             elif action_type == "reset_position":
                 result = self.game_client.reset_position()
-            elif action_type == "get_game_state":
-                result = self.game_client.get_game_state()
-            elif action_type == "get_level_info":
-                result = self.game_client.get_level_info()
             else:
                 result = {"success": False, "error": f"Unknown action: {action_type}"}
 

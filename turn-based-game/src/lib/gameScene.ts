@@ -207,7 +207,19 @@ export class GameScene {
         const data = JSON.parse(event.data);
         console.log('SSE data received:', data);
 
-        if (data.agents) {
+        if (data.type === 'computer_interaction') {
+          // Handle computer interaction event from server
+          console.log('Computer interaction event received:', data);
+          if (data.level_completed) {
+            console.log('Level completed detected, showing computer effect...');
+            this.showComputerUseEffect();
+            // Small delay before showing victory screen to let effect play
+            this.scene.time.delayedCall(1000, () => {
+              console.log('Showing victory screen...');
+              this.handleVictory();
+            });
+          }
+        } else if (data.agents) {
           // Update all agent positions from server
           this.serverAgentPositions = data.agents;
           this.activeAgent = data.activeAgent || 0;
@@ -229,6 +241,16 @@ export class GameScene {
 
           this.lastBridgeState = data.bridgesActivated;
           this.updateBridgeVisuals(data.bridgesActivated);
+        }
+
+        // Check for level completion only in computer_interaction events
+        if (data.type === 'computer_interaction' && data.level_completed && !this.isGameWon) {
+          console.log('Level completion detected in computer_interaction SSE event:', data);
+          this.showComputerUseEffect();
+          this.scene.time.delayedCall(1000, () => {
+            console.log('Showing victory screen from SSE...');
+            this.handleVictory();
+          });
         }
       } catch (error) {
         console.error('Failed to parse SSE data:', error);
@@ -375,13 +397,8 @@ export class GameScene {
 
       if (result.success) {
         console.log('Computer used:', result.data);
-        if (result.data.level_completed) {
-          this.showComputerUseEffect();
-          // Small delay before showing victory screen to let effect play
-          this.scene.time.delayedCall(1000, () => {
-            this.handleVictory();
-          });
-        }
+        // Computer interaction will be handled via server events
+        // No need to handle victory here as it will come through SSE
       } else {
         console.log('No action available - not near button or computer');
       }
@@ -887,7 +904,9 @@ export class GameScene {
   }
 
   private showComputerUseEffect(): void {
+    console.log('showComputerUseEffect called');
     const agentPosition = this.agentPositions[this.activeAgent];
+    console.log('Agent position:', agentPosition, 'Active agent:', this.activeAgent);
     if (agentPosition) {
       const worldX = this.offsetX + agentPosition.x * this.tileSize + this.tileSize / 2;
       const worldY = this.offsetY + agentPosition.y * this.tileSize + this.tileSize / 2;
