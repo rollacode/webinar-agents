@@ -18,6 +18,7 @@ export default function AgentControls() {
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [liveMessages, setLiveMessages] = useState<Array<{ id: number; text: string; type: string; timestamp: number }>>([]);
 
   const AGENT_SERVER_URL = 'http://localhost:5001';
 
@@ -106,6 +107,42 @@ export default function AgentControls() {
     }
   }, [agentStatus?.running]);
 
+  // Subscribe to live agent events via SSE
+  useEffect(() => {
+    const eventSource = new EventSource('/api/agent/events');
+
+    eventSource.onopen = () => {
+      console.log('Agent SSE connected');
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'agent_message_add') {
+          setLiveMessages((prev) => [
+            ...prev,
+            { id: data.id, text: data.message.text, type: data.message.type, timestamp: data.message.timestamp }
+          ].slice(-50));
+        } else if (data.type === 'agent_message_update') {
+          setLiveMessages((prev) => prev.map((m) => (
+            m.id === data.id ? { ...m, text: data.message.text, type: data.message.type, timestamp: data.message.timestamp } : m
+          )));
+        }
+      } catch (e) {
+        console.error('Failed to parse agent SSE event', e);
+      }
+    };
+
+    eventSource.onerror = (e) => {
+      console.error('Agent SSE error', e);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
+
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
   };
@@ -124,8 +161,8 @@ export default function AgentControls() {
     <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-80 max-h-96 overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-800">🤖 AI Agent</h3>
-        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} 
-             title={isConnected ? 'Connected' : 'Disconnected'} />
+        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+          title={isConnected ? 'Connected' : 'Disconnected'} />
       </div>
 
       <div className="space-y-3">
@@ -148,23 +185,21 @@ export default function AgentControls() {
           <button
             onClick={startAgent}
             disabled={!isConnected || loading || agentStatus?.running}
-            className={`px-3 py-1 text-sm rounded ${
-              !isConnected || loading || agentStatus?.running
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-green-500 text-white hover:bg-green-600'
-            }`}
+            className={`px-3 py-1 text-sm rounded ${!isConnected || loading || agentStatus?.running
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-green-500 text-white hover:bg-green-600'
+              }`}
           >
             {loading ? 'Starting...' : 'Start Agent'}
           </button>
-          
+
           <button
             onClick={stopAgent}
             disabled={!agentStatus?.running}
-            className={`px-3 py-1 text-sm rounded ${
-              !agentStatus?.running
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-red-500 text-white hover:bg-red-600'
-            }`}
+            className={`px-3 py-1 text-sm rounded ${!agentStatus?.running
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-red-500 text-white hover:bg-red-600'
+              }`}
           >
             Stop Agent
           </button>
@@ -188,11 +223,15 @@ export default function AgentControls() {
           </div>
         )}
 
-        {/* Instructions */}
-        <div className="text-xs text-gray-500 mt-3">
-          <div>💡 Make sure the agent server is running:</div>
-          <div className="font-mono bg-gray-100 p-1 rounded mt-1">
-            poetry run agent-server
+        {/* Live Agent Stream */}
+        <div className="mt-3">
+          <div className="max-h-40 overflow-y-auto text-xs space-y-1">
+            {liveMessages.map((m) => (
+              <div key={m.id} className={`${getStatusColor(m.type)}`}>
+                <span className="text-gray-400">[{new Date(m.timestamp).toLocaleTimeString()}]</span>
+                <span> {m.text}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

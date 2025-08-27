@@ -27,10 +27,6 @@ class GameClient:
         response = requests.post(url, json=payload)
         response_data = response.json()
 
-        logger.info(
-            f"📥 [MULTI_MOVE] Response data: {json.dumps(response_data, indent=2)}"
-        )
-
         return response_data
 
     def reset_position(self) -> Dict[str, Any]:
@@ -39,8 +35,6 @@ class GameClient:
 
         response = requests.post(url)
         response_data = response.json()
-
-        logger.info(f"📥 [RESET] Response data: {json.dumps(response_data, indent=2)}")
 
         return response_data
 
@@ -52,10 +46,6 @@ class GameClient:
         response = requests.post(url, json=payload)
         response_data = response.json()
 
-        logger.info(
-            f"📥 [SWITCH_AGENT] Response data: {json.dumps(response_data, indent=2)}"
-        )
-
         return response_data
 
     def use_button(self) -> Dict[str, Any]:
@@ -64,10 +54,6 @@ class GameClient:
 
         response = requests.post(url)
         response_data = response.json()
-
-        logger.info(
-            f"📥 [USE_BUTTON] Response data: {json.dumps(response_data, indent=2)}"
-        )
 
         return response_data
 
@@ -78,7 +64,24 @@ class GameClient:
         response = requests.post(url)
         response_data = response.json()
 
-        logger.info(f"📥 [USE_PC] Response data: {json.dumps(response_data, indent=2)}")
+        return response_data
+
+    # ----- Agent stream helpers -----
+    def agent_add_message(self, text: str, type_: str = "info") -> Dict[str, Any]:
+        """Add a new live agent message in UI via Next API."""
+        url = f"{self.base_url}/agent/events"
+        payload = {"action": "add", "message": {"text": text, "type": type_}}
+        response = requests.post(url, json=payload)
+        response_data = response.json()
+
+        return response_data
+
+    def agent_update_last(self, text: str, type_: str = "info") -> Dict[str, Any]:
+        """Update the last live agent message (stream-like)."""
+        url = f"{self.base_url}/agent/events"
+        payload = {"action": "update_last", "message": {"text": text, "type": type_}}
+        response = requests.post(url, json=payload)
+        response_data = response.json()
 
         return response_data
 
@@ -89,10 +92,6 @@ class GameClient:
         response = requests.get(url)
         response_data = response.json()
 
-        logger.info(
-            f"📥 [LEVEL_INFO] Response data: {json.dumps(response_data, indent=2)}"
-        )
-
         return response_data
 
     def get_game_state(self) -> Dict[str, Any]:
@@ -101,9 +100,5 @@ class GameClient:
 
         response = requests.get(url)
         response_data = response.json()
-
-        logger.info(
-            f"📥 [GAME_STATE] Response data: {json.dumps(response_data, indent=2)}"
-        )
 
         return response_data.get("data", {})

@@ -4,9 +4,11 @@ This agent can perform all available actions: move, use computer, use button, sw
 """
 
 import json
+import os
 import time
 from typing import Any, Dict, List, Optional, TypedDict
 
+import requests
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -26,9 +28,12 @@ from .tools import (
     UseComputerTool,
 )
 
-MAX_RECURSION_LIMIT = 30
+MAX_RECURSION_LIMIT = 500
 MODEL = "gpt-5-nano-2025-08-07"
 TEMPERATURE = 1
+USE_LLM_STUDIO = False
+LLM_STUDIO_BASE_URL = os.getenv("LLM_STUDIO_BASE_URL", "http://192.168.1.183:1234")
+LLM_STUDIO_MODEL = os.getenv("LLM_STUDIO_MODEL", "google/gemma-3-12b")
 
 
 class SimpleAgentState(TypedDict):
@@ -50,11 +55,17 @@ class SimpleAgent:
         temperature: float = TEMPERATURE,
     ):
         self.game_client = GameClient(game_url)
-        self.llm = ChatOpenAI(
-            openai_api_key=api_key,
-            model_name=MODEL,
-            temperature=temperature,
-        )
+        # Configure OpenAI key via env if provided
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+
+        # Use streaming-capable LLM client when not using LLM Studio
+        self.llm = None
+        if not USE_LLM_STUDIO:
+            self.llm = ChatOpenAI(
+                model=MODEL,
+                temperature=temperature,
+            )
         self.should_stop = False
 
         self.tools = [
@@ -227,16 +238,6 @@ use_button in available actions means it's possible to use the button.
 
 switch_agent in available actions means it's possible to switch to a different agent.
 
-Example response:
-{{
-"action": "multi_move",
-"parameters": {{"direction": "right", "steps": 5}}
-}}
-
-other actions just like
-{{
-"action": "use_computer"
-}}
 """
 
         messages = [
@@ -244,17 +245,15 @@ other actions just like
             HumanMessage(content=level_data),
         ]
 
-        return {"messages": messages, "level_data": level_info}
+        return {"messages": messages, "level_data": level_data}
 
     async def _analyze_situation(self, state: SimpleAgentState) -> Dict[str, Any]:
         """Analyze the current game situation."""
         game_data = self.game_client.get_game_state()
-        level_result = self.game_client.get_level_info()
-        level_data = level_result.get("data", {}) if level_result.get("success") else {}
 
         self.logger.log_info("Analyzing situation")
 
-        return {"game_data": game_data, "level_data": level_data}
+        return {"game_data": game_data}
 
     def _create_context_string(self, state: SimpleAgentState) -> str:
         """Create a context string describing the current situation."""
@@ -267,6 +266,22 @@ GAME STATE:
 - Agents count: {game_data.get("agentCount", 1)}
 - Available actions: {game_data.get("available_actions", [])}
 
+do not try to execute actions that are not available in the available_actions list
+
+Example response:
+{{
+"action": "multi_move",
+"parameters": {{"direction": "right", "steps": 5}}
+}}
+
+other actions just like
+{{
+"action": "use_computer"
+}}
+
+hint: on ladders you need to move 1 step more up to be aligned with the platform to move left and right then
+
+YOU MUST THINK BEFORE YOU RESPOND.
 """
 
         return context
@@ -276,22 +291,30 @@ GAME STATE:
         decision_context = self._create_context_string(state)
         messages = state.get("messages", [])
 
-        prompt = f"""{decision_context}
-hint: on ladders you need to move 1 step more up to be aligned with the platform to move left and right then"""
+        prompt = f"""{decision_context}"""
         messages.append(HumanMessage(content=prompt))
 
-        self.logger.log_sent(prompt)
+        self.logger.log_sent(messages)
 
-        response = self.llm.invoke(messages)
-        response_content = response.content
+        self.logger.log_info("Streaming LLM response for decision")
+        self.game_client.agent_add_message("Thinking about next action...", "action")
+
+        response_content: str = ""
+        try:
+            for delta in self._stream_completion(messages, temperature=TEMPERATURE):
+                if not delta:
+                    continue
+                response_content += delta
+                self.game_client.agent_update_last(f"LLM: {response_content}", "action")
+        except Exception as e:
+            self.logger.log_error(f"Streaming failed, falling back to invoke: {str(e)}")
+            response_content = self._invoke_completion(
+                messages, temperature=TEMPERATURE
+            )
 
         messages.append(AIMessage(content=response_content))
-
         print(response_content)
-        if isinstance(response_content, list):
-            response_content = str(response_content[0]) if response_content else ""
 
-        # Extract JSON from response
         action_data = extract_json_from_text(response_content)
         if action_data is None:
             self.logger.log_error(f"No valid JSON found in response {response_content}")
@@ -299,7 +322,112 @@ hint: on ladders you need to move 1 step more up to be aligned with the platform
 
         self.logger.log_answered(response_content)
 
+        try:
+            decided = action_data.get("action", "unknown")
+            self.game_client.agent_update_last(f"Action decided: {decided}", "success")
+        except Exception:
+            pass
+
         return {"last_action": json.dumps(action_data), "messages": messages}
+
+    def _convert_messages(
+        self, messages: List[SystemMessage | HumanMessage | AIMessage]
+    ) -> List[Dict[str, str]]:
+        converted: List[Dict[str, str]] = []
+        for m in messages:
+            role = "user"
+            if isinstance(m, SystemMessage):
+                role = "system"
+            elif isinstance(m, HumanMessage):
+                role = "user"
+            elif isinstance(m, AIMessage):
+                role = "assistant"
+            content = m.content if isinstance(m.content, str) else str(m.content)
+            converted.append({"role": role, "content": content})
+        return converted
+
+    def _stream_completion(
+        self,
+        messages: List[SystemMessage | HumanMessage | AIMessage],
+        temperature: float = TEMPERATURE,
+    ):
+        """Yield delta strings from either OpenAI client or LLM Studio server."""
+        if not USE_LLM_STUDIO:
+            assert self.llm is not None
+            for chunk in self.llm.stream(messages):
+                delta = getattr(chunk, "content", None)
+                if isinstance(delta, list):
+                    delta = "".join(str(part) for part in delta)
+                if not isinstance(delta, str):
+                    delta = str(delta) if delta is not None else ""
+                yield delta
+            return
+
+        url = f"{LLM_STUDIO_BASE_URL}/v1/chat/completions"
+        payload = {
+            "model": LLM_STUDIO_MODEL,
+            "messages": self._convert_messages(messages),
+            "temperature": temperature,
+            "max_tokens": -1,
+            "stream": True,
+        }
+        with requests.post(url, json=payload, stream=True) as r:
+            r.raise_for_status()
+            for raw_line in r.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+                line = raw_line.strip()
+                if not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data_str)
+                    choices = obj.get("choices", [])
+                    if choices:
+                        delta_obj = choices[0].get("delta", {}) or choices[0].get(
+                            "message", {}
+                        )
+                        piece = delta_obj.get("content", "")
+                        if piece:
+                            yield piece
+                except Exception:
+                    continue
+
+    def _invoke_completion(
+        self,
+        messages: List[SystemMessage | HumanMessage | AIMessage],
+        temperature: float = TEMPERATURE,
+    ) -> str:
+        if not USE_LLM_STUDIO:
+            llm = self.llm
+            assert llm is not None
+            resp = llm.invoke(messages)
+            rc_any: Any = resp.content if hasattr(resp, "content") else str(resp)
+            if isinstance(rc_any, str):
+                return rc_any
+            if isinstance(rc_any, list):
+                return str(rc_any[0]) if rc_any else ""
+            return str(rc_any)
+
+        url = f"{LLM_STUDIO_BASE_URL}/v1/chat/completions"
+        payload = {
+            "model": LLM_STUDIO_MODEL,
+            "messages": self._convert_messages(messages),
+            "temperature": temperature,
+            "max_tokens": -1,
+            "stream": False,
+        }
+        http_response: requests.Response = requests.post(url, json=payload)
+        http_response.raise_for_status()
+        parsed: Dict[str, Any] = http_response.json()
+        choices: List[Any] = parsed.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            content = msg.get("content", "")
+            return content if isinstance(content, str) else str(content)
+        return ""
 
     async def _execute_action(self, state: SimpleAgentState) -> Dict[str, Any]:
         """Execute the decided action."""
@@ -314,7 +442,7 @@ hint: on ladders you need to move 1 step more up to be aligned with the platform
                     parameters["steps"],
                     parameters.get("agent_index", 0),
                 )
-            elif action_type == "use_computer":
+            elif action_type == "use_computer" or action_type == "use_pc":
                 result = self.game_client.use_computer()
             elif action_type == "use_button":
                 result = self.game_client.use_button()
