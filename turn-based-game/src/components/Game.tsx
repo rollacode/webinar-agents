@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { PhaserGame, IRefPhaserGame } from './PhaserGame';
+import AgentControls from './AgentControls';
 
 interface LevelData {
   id: number;
@@ -30,13 +31,14 @@ export default function Game({ selectedLevel, onBackToMenu }: GameProps) {
   };
 
   return (
-    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+    <div className="w-full h-full bg-gray-800 flex items-center justify-center relative">
       <PhaserGame
         ref={phaserRef}
         currentActiveScene={currentActiveScene}
         selectedLevel={selectedLevel}
         onBackToMenu={onBackToMenu}
       />
+      <AgentControls />
     </div>
   );
 } 

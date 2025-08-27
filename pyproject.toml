@@ -2,8 +2,8 @@
 name = "webinar-agents"
 version = "0.1.0"
 description = "Webinar project with turn-based game and AI agents"
-authors = ["Developer"]
-packages = [{include = "agents"}]
+authors = ["Andrey Kovalev"]
+packages = [{include = "agents"}, {include = "scripts"}] 
 
 [tool.poetry.dependencies]
 python = "^3.12.3"
@@ -16,6 +16,8 @@ python-dotenv = "^1.0.0"
 requests = "^2.31.0"
 openai = "^1.0.0"
 types-requests = "^2.31.0"
+flask = "^3.0.0"
+flask-cors = "^4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
@@ -24,8 +26,8 @@ flake8 = "^7.0.0"
 pytest = "^8.0.0"
 
 [tool.poetry.scripts]
-backend = "scripts.run_backend:main"
-frontend = "scripts.run_frontend:main"
+front = "scripts.run_frontend:main"
+agents = "scripts.run_agent_server:main"
 
 [build-system]
 requires = ["poetry-core"]
