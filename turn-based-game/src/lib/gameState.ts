@@ -53,13 +53,13 @@ class GameState {
   // Set the current level data
   setCurrentLevel(levelData: LevelData): void {
     this.currentLevel = levelData;
-    
+
     // Initialize agents based on level data
     this.agents = [levelData.starting_position];
     if (levelData.starting_position_2) {
       this.agents.push(levelData.starting_position_2);
     }
-    
+
     // Reset to first agent and bridge state
     this.activeAgent = 0;
     this.bridgesActivated = false;
@@ -68,12 +68,12 @@ class GameState {
   // Check if agent stepped on a button and activate bridges
   checkForButtonPress(position: Position): boolean {
     const tileAtPosition = this.getTileAt(position.x, position.y);
-    
+
     if (tileAtPosition === 'B' && !this.bridgesActivated) {
       this.activateBridges();
       return true; // Button was pressed
     }
-    
+
     return false; // No button press
   }
 
@@ -92,12 +92,12 @@ class GameState {
   // Get effective tile (considering bridge state)
   getEffectiveTileAt(x: number, y: number): string {
     const originalTile = this.getTileAt(x, y);
-    
+
     // If bridges are activated, Z becomes T (passable)
     if (this.bridgesActivated && originalTile === 'Z') {
       return 'T';
     }
-    
+
     return originalTile;
   }
 
@@ -129,19 +129,19 @@ class GameState {
     const rightGroundTile = this.getTileAt(x + 1, y + 1);
 
     if (leftGroundTile === '#') {
-      actions.push('move_left');
+      actions.push('multi_move[left]');
     }
 
     if (rightGroundTile === '#') {
-      actions.push('move_right');
+      actions.push('multi_move[right]');
     }
 
     if (currentTile === '|') {
-      actions.push('move_up');
+      actions.push('multi_move[up]');
     }
 
     if (groundTile === '|') {
-      actions.push('move_down');
+      actions.push('multi_move[down]');
     }
 
     const leftTile = this.getTileAt(x - 1, y);

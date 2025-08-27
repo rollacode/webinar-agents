@@ -62,7 +62,7 @@ export interface ApiResponse<T = any> {
 // New types for character movement system
 export type TileType = 'platform' | 'ladder' | 'empty' | 'computer' | 'agent';
 
-export type ActionType = 'move_left' | 'move_right' | 'move_up' | 'move_down' | 'use_pc' | 'use_button';
+export type ActionType = 'multi_move[left]' | 'multi_move[right]' | 'multi_move[up]' | 'multi_move[down]' | 'use_pc' | 'use_button';
 
 export interface MoveStepResult {
   result: boolean;

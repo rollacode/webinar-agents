@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface AgentStatus {
   running: boolean;
@@ -19,6 +19,7 @@ export default function AgentControls() {
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [liveMessages, setLiveMessages] = useState<Array<{ id: number; text: string; type: string; timestamp: number }>>([]);
+  const liveListRef = useRef<HTMLDivElement | null>(null);
 
   const AGENT_SERVER_URL = 'http://localhost:5001';
 
@@ -107,6 +108,14 @@ export default function AgentControls() {
     }
   }, [agentStatus?.running]);
 
+  // Auto-scroll live stream to the latest message
+  useEffect(() => {
+    const el = liveListRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [liveMessages]);
+
   // Subscribe to live agent events via SSE
   useEffect(() => {
     const eventSource = new EventSource('/api/agent/events');
@@ -147,18 +156,8 @@ export default function AgentControls() {
     return new Date(timestamp * 1000).toLocaleTimeString();
   };
 
-  const getStatusColor = (type: string) => {
-    switch (type) {
-      case 'success': return 'text-green-500';
-      case 'error': return 'text-red-500';
-      case 'warning': return 'text-yellow-500';
-      case 'action': return 'text-blue-500';
-      default: return 'text-gray-500';
-    }
-  };
-
   return (
-    <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-80 max-h-96 overflow-hidden">
+    <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-96 max-h-[36rem] overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-800">🤖 AI Agent</h3>
         <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
@@ -171,14 +170,7 @@ export default function AgentControls() {
           Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
 
-        {/* Agent Status */}
-        {agentStatus && (
-          <div className="text-sm">
-            <div className="font-medium">
-              Agent: {agentStatus.running ? '🟢 Running' : '⚪ Stopped'}
-            </div>
-          </div>
-        )}
+        {/* Agent status removed per request */}
 
         {/* Control Buttons */}
         <div className="flex space-x-2">
@@ -205,13 +197,12 @@ export default function AgentControls() {
           </button>
         </div>
 
-        {/* Results Log */}
+        {/* Results Log (title removed per request) */}
         {agentStatus?.results && agentStatus.results.length > 0 && (
           <div className="mt-3">
-            <div className="text-sm font-medium text-gray-700 mb-2">Recent Actions:</div>
-            <div className="max-h-32 overflow-y-auto text-xs space-y-1">
+            <div className="max-h-40 overflow-y-auto text-xs space-y-1">
               {agentStatus.results.slice(-5).map((result, index) => (
-                <div key={index} className={`${getStatusColor(result.type)}`}>
+                <div key={index} className="text-black">
                   <span className="text-gray-400">[{formatTimestamp(result.timestamp)}]</span>
                   {result.type === 'action' && (
                     <span> {result.action} {result.success ? '✅' : '❌'}</span>
@@ -223,11 +214,11 @@ export default function AgentControls() {
           </div>
         )}
 
-        {/* Live Agent Stream */}
+        {/* Live Agent Stream (auto-scroll, gray for thinking) */}
         <div className="mt-3">
-          <div className="max-h-40 overflow-y-auto text-xs space-y-1">
+          <div ref={liveListRef} className="max-h-72 overflow-y-auto text-xs space-y-1">
             {liveMessages.map((m) => (
-              <div key={m.id} className={`${getStatusColor(m.type)}`}>
+              <div key={m.id} className={m.type === 'action' ? 'text-gray-600' : 'text-black'}>
                 <span className="text-gray-400">[{new Date(m.timestamp).toLocaleTimeString()}]</span>
                 <span> {m.text}</span>
               </div>

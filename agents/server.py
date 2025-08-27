@@ -28,7 +28,6 @@ CORS(app)  # Allow cross-origin requests from the frontend
 
 # Global state
 agent_thread = None
-agent_running = False
 agent_results: list = []
 
 
@@ -37,21 +36,16 @@ class AgentRunner:
         self.game_client = GameClient()
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.agent = SimpleAgent(api_key=self.api_key) if self.api_key else None
-        self.running = False
         self.results = []
 
     def start_agent(self):
         """Start the AI agent in a separate thread."""
-        if self.running:
-            return {"success": False, "error": "Agent is already running"}
-
         if not self.agent:
             return {
                 "success": False,
                 "error": "OPENAI_API_KEY not set. Cannot start AI agent.",
             }
 
-        self.running = True
         self.results = []
 
         thread = threading.Thread(target=self._run_agent)
@@ -62,14 +56,13 @@ class AgentRunner:
 
     def stop_agent(self):
         """Stop the AI agent."""
-        self.running = False
         self.agent.stop()
         return {"success": True, "message": "Agent stopped"}
 
     def get_status(self):
         """Get current agent status."""
         return {
-            "running": self.running,
+            "running": self.agent.running,
             "results": self.results[-10:] if self.results else [],  # Last 10 results
             "has_ai": self.agent is not None,
         }
