@@ -26,8 +26,8 @@ export interface TileMapping {
 export const TILE_UV_MAPPING = {
   'C': { tileset: 'tileset', uMin: 0.5, uMax: 1.0, vMin: 0.0, vMax: 0.5 }, // computer
   '#': { tileset: 'tileset', uMin: 0.0, uMax: 0.5, vMin: 0.5, vMax: 1.0 }, // platform
-  '|': { tileset: 'tileset', uMin: 0.5, uMax: 1.0, vMin: 0.5, vMax: 1.0 }, // ladder
-  '░': { tileset: 'tileset', uMin: 0.0, uMax: 0.5, vMin: 0.0, vMax: 0.5 }, // empty
+  'L': { tileset: 'tileset', uMin: 0.5, uMax: 1.0, vMin: 0.5, vMax: 1.0 }, // ladder
+  'E': { tileset: 'tileset', uMin: 0.0, uMax: 0.5, vMin: 0.0, vMax: 0.5 }, // empty
   'B': { tileset: 'tileset2', uMin: 0.0, uMax: 0.5, vMin: 0.0, vMax: 0.5 }, // button
   'Z': { tileset: 'tileset2', uMin: 0.0, uMax: 0.5, vMin: 0.5, vMax: 1.0 }, // bridge up (impassable)
   'T': { tileset: 'tileset2', uMin: 0.5, uMax: 1.0, vMin: 0.5, vMax: 1.0 }  // bridge down (passable)

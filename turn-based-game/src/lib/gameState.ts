@@ -84,7 +84,7 @@ class GameState {
   // Helper functions
   getTileAt(x: number, y: number): string {
     if (x < 0 || x >= this.currentLevel.size.width || y < 0 || y >= this.currentLevel.size.height) {
-      return '░';
+      return 'E';
     }
     return this.currentLevel.layout[y][x];
   }
@@ -136,11 +136,11 @@ class GameState {
       actions.push('multi_move[right]');
     }
 
-    if (currentTile === '|') {
+    if (currentTile === 'L') {
       actions.push('multi_move[up]');
     }
 
-    if (groundTile === '|') {
+    if (groundTile === 'L') {
       actions.push('multi_move[down]');
     }
 
@@ -180,7 +180,7 @@ class GameState {
     // Horizontal movement
     if (from.y === to.y) {
       // Need platform under target position for horizontal movement
-      if (targetGroundTile !== '#' && targetGroundTile !== '|' && targetGroundTile !== 'T') {
+      if (targetGroundTile !== '#' && targetGroundTile !== 'L' && targetGroundTile !== 'T') {
         return { canMove: false, reason: 'No platform under target position' };
       }
       return { canMove: true };
@@ -190,7 +190,7 @@ class GameState {
     if (from.x === to.x) {
       if (to.y < from.y) {
         // Moving up - must be on ladder
-        if (currentTile !== '|') {
+        if (currentTile !== 'L') {
           return { canMove: false, reason: 'Must be on ladder to move up' };
         }
         return { canMove: true };
@@ -198,7 +198,7 @@ class GameState {
 
       if (to.y > from.y) {
         // Moving down - need ladder under current position
-        if (currentGroundTile !== '|') {
+        if (currentGroundTile !== 'L') {
           return { canMove: false, reason: 'No ladder under current position to move down' };
         }
         return { canMove: true };

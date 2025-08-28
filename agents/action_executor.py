@@ -14,7 +14,14 @@ class ActionExecutor:
             action_type = action_data.get("action", "")
             parameters = action_data.get("parameters", {})
 
-            if action_type == "multi_move":
+            if (
+                action_type == "multi_move"
+                or action_type == "move"
+                or action_type == "multi_move[right]"
+                or action_type == "multi_move[left]"
+                or action_type == "multi_move[up]"
+                or action_type == "multi_move[down]"
+            ):
                 result = self.game_client.multi_move(
                     parameters["direction"],
                     parameters["steps"],

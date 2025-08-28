@@ -10,19 +10,19 @@
   "legend": {
     "C": "computer",
     "#": "platform",
-    "|": "ladder",
-    "░": "empty"
+    "L": "ladder",
+    "E": "empty"
   },
   "layout": [
-    "░░░░░░░░C░░░░░",
-    "###|##########",
-    "░░░|░░░░░░░░░░",
-    "░░░|░░░░░░░░░░",
-    "########|#####",
-    "░░░░░░░░|░░░░░",
-    "░░░░░░░░|░░░░░",
-    "░░░░░░░░|░░░░░",
+    "EEEEEEEECEEEEE",
+    "###L########L#",
+    "EEELEEEEEEEELE",
+    "EEELEEEEEEEELE",
+    "###L####L###L#",
+    "EEEEEEEELEEEEE",
+    "EEEEEEEELEEEEE",
+    "EEEEEEEELEEEEE",
     "##############",
-    "░░░░░░░░░░░░░░"
+    "EEEEEEEEEEEEEE"
   ]
 }

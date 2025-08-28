@@ -6,35 +6,22 @@ def get_system_prompt() -> str:
 You are an AI agent controlling a character in a 2D platformer game. Your goal is to navigate the level and reach the computer (C) to complete the level.
 
 GAME MECHANICS:
-- You can move on platforms and climb ladders
+- You can move on platforms # and climb ladders L
 - You can move multiple steps in one direction (1-10 steps)
 - Movement directions: up, down, left, right
-- You can only move to valid positions (on platforms or ladders)
-- There may be multiple agents you can switch between
+- You can only move to valid positions (on platforms # or ladders L)
 
 LEVEL OBJECTIVES:
-1. Navigate through the level using platforms # and ladders |
-2. Find and reach the computer (C) to complete the level
-3. Use buttons if available to activate bridges
-4. Switch between agents if there are multiple agents available
+1. Find and reach the computer (C) to complete the level
+2. Use buttons if available to activate bridges
+3. Switch between agents if there are multiple agents available
 
 AVAILABLE ACTIONS:
 - multi_move: Move multiple steps in one direction
 - use_computer: Use computer when standing on or adjacent to it (completes level)
 - use_button: Press button when standing on it (activates bridges)
 - switch_agent: Switch to different agent by index
-- reset_position: Reset to starting position (use if stuck)
 
-STRATEGY:
-1. First, get the level information to understand the layout
-2. Get current game state to see your position and available actions
-3. Plan your path to the computer using platforms and ladders
-4. Move efficiently using multi_move when possible
-5. Use buttons to activate bridges if needed
-6. Switch agents if it helps reach the objective
-7. Use computer when you reach it to complete the level, do not forget that comuter have X and Y coordinates, so ladders!
-
-Always analyze the level layout and plan your moves carefully. Use multi_move for efficient movement along platforms.
 """
 
 
@@ -49,20 +36,6 @@ LEVEL INFORMATION:
 - Size: {level_info.get("size", {})}
 - Layout:
 {layout_string}
-
-Based on the level layout and your current situation, what action should you take?
-Respond with a JSON object containing:
-- action: the tool name to use
-- parameters: object with parameters for the tool if needed
-
-multi_moves can be made with steps 1 to 10 just put amount of steps you want to move.
-you could predict how many steps you need to move like to clump a ladder or to get to the computer.
-
-use_computer in available actions means it's possible to use the computer.
-use_button in available actions means it's possible to use the button.
-
-switch_agent in available actions means it's possible to switch to a different agent.
-
 """
 
 
@@ -71,13 +44,29 @@ def build_decision_prompt(game_data: Dict[str, Any], level_data: Dict[str, Any])
     level_map = level_data.get("layout", [])
     map_height = len(level_map)
 
+    helper_text = "You are not on ladder right now so you can't move up or down."
+
     level_map = [list(row) for row in level_map]
-    level_map[position["y"]][position["x"]] = "X"
+    current_pos_tile = level_map[position["y"]][position["x"]]
+    if current_pos_tile == "L":
+        level_map[position["y"]][position["x"]] = "H"
+        helper_text = "You are on ladder right now so you CAN move up or down."
+    elif current_pos_tile == "B":
+        level_map[position["y"]][position["x"]] = "G"
+        helper_text = "You are on button right now so you CAN press it."
+    elif current_pos_tile == "C":
+        level_map[position["y"]][position["x"]] = "J"
+        helper_text = "You are on computer right now so you CAN use it."
+    else:
+        level_map[position["y"]][position["x"]] = "X"
 
     converted_agent_position = {
         "x": position["x"],
         "y": map_height - 1 - position["y"],
     }
+    converted_agent_position_str = (
+        f"{{x: {converted_agent_position['x']}, y: {converted_agent_position['y']}}}"
+    )
 
     computer_position = None
     for y, row in enumerate(level_map):
@@ -93,27 +82,22 @@ def build_decision_prompt(game_data: Dict[str, Any], level_data: Dict[str, Any])
 
     if computer_position:
         computer_y_bottom_left = map_height - 1 - computer_position[0]
-        computer_pos_str = (
-            f'{{"x": {computer_position[1]}, "y": {computer_y_bottom_left}}}'
-        )
+        computer_pos_str = f"{{x: {computer_position[1]}, y: {computer_y_bottom_left}}}"
     else:
         computer_pos_str = "Not found"
 
     return f"""
-GAME STATE:
-- Current position: {converted_agent_position}
+<SYSTEM_PROMPT>
+{get_system_prompt()}
+</SYSTEM_PROMPT>
+
+>GAME STATE>
+- Current position: {converted_agent_position_str}
 - Computer position: {computer_pos_str}
 - Active agent: {game_data.get("activeAgent", 0)}
 - Agents count: {game_data.get("agentCount", 1)}
 - Available actions: {game_data.get("available_actions", [])}
-
-Example response:
-{{
-"plan": "I need to move ... to reach the computer",
-"path_planning": "I moving ... because I see that computer is on top and I need to use ladders to reach it",
-"action": "...",
-"parameters": {{"direction": "...", "steps": ...}}
-}}
+</GAME_STATE>
 
 <HINT>
     You can make multiple steps at ones in one direction.
@@ -123,18 +107,69 @@ Example response:
 <LEVEL_MAP>
 {level_map_string}
 
-platforms (#), ladders (|), empty spaces (░), Computer (C), Button (B)
-X is your current position
+platforms (#), ladders (L), empty spaces (E), Computer (C), Button (B), your current position (X), your current ladder position (H), bridge (G)
+
+X is your current position, H means same as X but on ladder.
+G means same as X but you are on Button.
+J means same as X but you are on Computer.
 </LEVEL_MAP>
 
-YOU NEED TO STAY ON LADDERS TO BE ABLE TO MOVE UP AND DOWN! LADDERS ARE NOT EMPTY SPACES THYE HAVE SYMBOL (|)
-Set your goal to reach the computer in few steps and move there.
-DO not try to clumb up or down without ladders!
-
 <IMPORTANT>
-  Do not try to execute actions that are not available in the Available actions array {game_data.get("available_actions", [])}
-  you can only use actions that are in the Available actions array.
+    YOU NEED TO STAY ON LADDERS TO BE ABLE TO MOVE UP AND DOWN! LADDERS ARE NOT EMPTY SPACES THYE HAVE SYMBOL (L)
+    Set your goal to reach the computer in few steps and move there.
+    DO not try to clumb up or down without ladders!
 
-  move towards the ladder if you see it.
+    Do not try to execute actions that are not available in the Available actions
+    you can only use actions that are in the Available actions array.
+
+    Do not try to move under computer just to allign with it, you need to use ladders to reach it.
+    Just move up if computer above and down if computer below use ladders!!!
+
+    to activate pc you need to be on exact position of computer, not on ladder.
+    {helper_text}
 </IMPORTANT>
+
+<THINK>
+  ACT AS DISCOVERER! DO NOT BE STUCK! DO NOT SCARE DO THE THINGS GO TO THE COMPUTER WITH BEST PATHFINDING ALGORITHM!
+  YOU ARE THINKIN ABOUT YOUR NEXT ACTION HERE BE A DISCOVERER! TRY TO FIND THE BEST PATH TO THE COMPUTER!
+  JUST DESCRIBE IN WARDS WHAT YOU THINK YOU SHOULD DO! DO NOT SCARE!
+  IF YOU ARE STUCK SEARCH LADDERS THAT LEAD TO COMPUTER!
+</THINK>
+
+<COORDINATES_FORMAT>
+  x: 0, y: 0 is bottom left corner
+
+  so if computer y coordinate is 0 you need to move down to reach it.
+  if your y coordinate is lower then computer y coordinate you need to move up to reach it, and vice versa.
+
+  plan your path and keep in mind that you can move multiple steps at once.
+  you may use bulletpoints to describe your idea
+
+  PICK ONLY ONE LADDER TO CLIMB AT A TIME! JUST GO UP AND UP TO THE PC IF IT IS ABOVE YOU!
+</COORDINATES_FORMAT>
+"""
+
+
+def build_verify_action_prompt() -> str:
+    return """
+From everything that you said in previous messages, verify that the action is possible to execute.
+Return only JSON object with action and parameters.
+
+<EXAMPLE_RESPONSE>
+{
+"action": "...",
+"parameters": {"direction": "...", "steps": ...}
+"explanation": "explain your decision"
+}
+</EXAMPLE_RESPONSE>
+
+multi_move[right] means you can do {{"action": "multi_move", "parameters": {{"direction": "right", "steps": ...}}}}
+
+decide multiple steps at once if possible it will be better for you.
+
+PICK ONLY ONE LADDER TO CLIMB AT A TIME! JUST GO UP AND UP TO THE PC IF IT IS ABOVE YOU!
+Check previous steps and try to avoid repeating them, means if you moved right 1 time and then left 1 time, 
+it's a cycle and you need to think how to break it with other actions, or with some plan of action that will lead you to pc
+
+JSON ONLY!
 """

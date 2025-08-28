@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface AgentStatus {
   running: boolean;
@@ -157,50 +159,51 @@ export default function AgentControls() {
   };
 
   return (
-    <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-96 max-h-[36rem] overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
+    <div className="fixed top-0 right-0 bg-white shadow-lg w-96 h-screen flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <h3 className="text-lg font-semibold text-gray-800">🤖 AI Agent</h3>
         <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
           title={isConnected ? 'Connected' : 'Disconnected'} />
       </div>
 
-      <div className="space-y-3">
-        {/* Connection Status */}
-        <div className="text-sm text-gray-600">
-          Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
-        </div>
+      {/* Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Status and Controls */}
+        <div className="p-4 space-y-3 border-b border-gray-200">
+          {/* Connection Status */}
+          <div className="text-sm text-gray-600">
+            Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          </div>
 
-        {/* Agent status removed per request */}
+          {/* Control Buttons */}
+          <div className="flex space-x-2">
+            <button
+              onClick={startAgent}
+              disabled={!isConnected || loading || agentStatus?.running}
+              className={`px-3 py-1 text-sm rounded ${!isConnected || loading || agentStatus?.running
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+            >
+              {loading ? 'Starting...' : 'Start Agent'}
+            </button>
 
-        {/* Control Buttons */}
-        <div className="flex space-x-2">
-          <button
-            onClick={startAgent}
-            disabled={!isConnected || loading || agentStatus?.running}
-            className={`px-3 py-1 text-sm rounded ${!isConnected || loading || agentStatus?.running
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-green-500 text-white hover:bg-green-600'
-              }`}
-          >
-            {loading ? 'Starting...' : 'Start Agent'}
-          </button>
+            <button
+              onClick={stopAgent}
+              disabled={!agentStatus?.running}
+              className={`px-3 py-1 text-sm rounded ${!agentStatus?.running
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+            >
+              Stop Agent
+            </button>
+          </div>
 
-          <button
-            onClick={stopAgent}
-            disabled={!agentStatus?.running}
-            className={`px-3 py-1 text-sm rounded ${!agentStatus?.running
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-red-500 text-white hover:bg-red-600'
-              }`}
-          >
-            Stop Agent
-          </button>
-        </div>
-
-        {/* Results Log (title removed per request) */}
-        {agentStatus?.results && agentStatus.results.length > 0 && (
-          <div className="mt-3">
-            <div className="max-h-40 overflow-y-auto text-xs space-y-1">
+          {/* Results Log */}
+          {agentStatus?.results && agentStatus.results.length > 0 && (
+            <div className="max-h-32 overflow-y-auto text-xs space-y-1">
               {agentStatus.results.slice(-5).map((result, index) => (
                 <div key={index} className="text-black">
                   <span className="text-gray-400">[{formatTimestamp(result.timestamp)}]</span>
@@ -211,16 +214,51 @@ export default function AgentControls() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Live Agent Stream (auto-scroll, gray for thinking) */}
-        <div className="mt-3">
-          <div ref={liveListRef} className="max-h-72 overflow-y-auto text-xs space-y-1">
+        {/* Live Agent Stream - Full Height Chat */}
+        <div className="flex-1 overflow-hidden">
+          <div ref={liveListRef} className="h-full overflow-y-auto p-4 space-y-3">
             {liveMessages.map((m) => (
-              <div key={m.id} className={m.type === 'action' ? 'text-gray-600' : 'text-black'}>
-                <span className="text-gray-400">[{new Date(m.timestamp).toLocaleTimeString()}]</span>
-                <span> {m.text}</span>
+              <div key={m.id} className={`text-sm ${m.type === 'action' ? 'text-gray-600' : 'text-black'}`}>
+                <div className="text-gray-400 text-xs mb-1">
+                  [{new Date(m.timestamp).toLocaleTimeString()}]
+                </div>
+                <div className={`prose prose-sm max-w-none ${m.type === 'action' ? 'text-gray-600' : 'text-black'}`}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      // Custom styling for markdown elements
+                      p: ({ children }) => <p className="mb-2">{children}</p>,
+                      code: ({ children, className }) => (
+                        <code className={`${className} bg-gray-100 px-1 py-0.5 rounded text-xs`}>
+                          {children}
+                        </code>
+                      ),
+                      pre: ({ children }) => (
+                        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto mb-2">
+                          {children}
+                        </pre>
+                      ),
+                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                      li: ({ children }) => <li className="text-sm">{children}</li>,
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-gray-300 pl-3 italic text-gray-600 mb-2">
+                          {children}
+                        </blockquote>
+                      ),
+                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                    }}
+                  >
+                    {m.text}
+                  </ReactMarkdown>
+                </div>
               </div>
             ))}
           </div>

@@ -18,7 +18,12 @@ from agents.action_executor import ActionExecutor
 from agents.agent_logger import AgentLogger
 from agents.game_client import GameClient
 from agents.llm_service import LLMService
-from agents.prompts import build_decision_prompt, build_level_prompt, get_system_prompt
+from agents.prompts import (
+    build_decision_prompt,
+    build_level_prompt,
+    build_verify_action_prompt,
+    get_system_prompt,
+)
 from agents.utils import extract_json_from_text
 
 
@@ -28,6 +33,7 @@ class LLMStudioModel(Enum):
     GEMMA_3_12B = "google/gemma-3-12b"
     GEMMA_3_27B = "google/gemma-3-27b"
     DEEPSEEK_R1 = "deepseek/deepseek-r1-0528-qwen3-8b"
+    GPT_OSS = "openai/gpt-oss-20b"
 
 
 MAX_RECURSION_LIMIT = 500
@@ -35,7 +41,8 @@ MODEL = "gpt-5-nano-2025-08-07"
 TEMPERATURE = 1
 USE_LLM_STUDIO = True
 LLM_STUDIO_BASE_URL = os.getenv("LLM_STUDIO_BASE_URL", "http://192.168.1.183:1234")
-LLM_STUDIO_MODEL = os.getenv("LLM_STUDIO_MODEL", LLMStudioModel.DEEPSEEK_R1.value)
+LLM_STUDIO_MODEL = os.getenv("LLM_STUDIO_MODEL", LLMStudioModel.GPT_OSS.value)
+CONVERSATION_HISTORY_LENGTH = 5
 
 
 class SimpleAgentState(TypedDict):
@@ -148,6 +155,7 @@ class SimpleAgent:
         builder.add_node("initialize", self._initialize)
         builder.add_node("analyze_situation", self._analyze_situation)
         builder.add_node("decide_action", self._decide_action)
+        builder.add_node("verify_action", self._verify_action)
         builder.add_node("execute_action", self._execute_action)
         builder.add_node("evaluate_result", self._evaluate_result)
 
@@ -155,7 +163,8 @@ class SimpleAgent:
         builder.add_edge(START, "initialize")
         builder.add_edge("initialize", "analyze_situation")
         builder.add_edge("analyze_situation", "decide_action")
-        builder.add_edge("decide_action", "execute_action")
+        builder.add_edge("decide_action", "verify_action")
+        builder.add_edge("verify_action", "execute_action")
         builder.add_edge("execute_action", "evaluate_result")
         builder.add_conditional_edges(
             "evaluate_result",
@@ -198,38 +207,50 @@ class SimpleAgent:
         messages.append(HumanMessage(content=decision_prompt))
 
         self.logger.log_sent(decision_prompt)
-        self.game_client.agent_add_message("Thinking about next action...", "action")
+        self.game_client.agent_add_message("Thinking about next decision...", "action")
 
         response_content: str = ""
-        try:
-            for delta in self.llm_service.stream_completion(
-                messages, temperature=TEMPERATURE
-            ):
-                if not delta:
-                    continue
-                response_content += delta
-                self.game_client.agent_update_last(f"LLM: {response_content}", "action")
-        except Exception as e:
-            self.logger.log_error(f"Streaming failed, falling back to invoke: {str(e)}")
-            response_content = self.llm_service.invoke_completion(
-                messages, temperature=TEMPERATURE
-            )
+        last_messages = messages[-1:]
 
+        for delta in self.llm_service.stream_completion(
+            last_messages, temperature=TEMPERATURE
+        ):
+            if not delta:
+                continue
+            response_content += delta
+            self.game_client.agent_update_last(f"LLM: {response_content}", "action")
+
+        self.logger.log_answered(response_content)
         messages.append(AIMessage(content=response_content))
-        print(response_content)
+        return {"messages": messages}
+
+    async def _verify_action(self, state: SimpleAgentState) -> Dict[str, Any]:
+        """Verify the decided action."""
+
+        verify_action_prompt = build_verify_action_prompt()
+        messages = state.get("messages", [])
+
+        messages.append(HumanMessage(content=verify_action_prompt))
+        self.logger.log_sent(verify_action_prompt)
+        self.game_client.agent_add_message("Verifying decision...", "action")
+
+        last_messages = messages[-CONVERSATION_HISTORY_LENGTH:]
+        response_content: str = ""
+        for delta in self.llm_service.stream_completion(
+            last_messages, temperature=TEMPERATURE
+        ):
+            if not delta:
+                continue
+            response_content += delta
+            self.game_client.agent_update_last(f"LLM: {response_content}", "action")
+
+        self.logger.log_answered(response_content)
+        messages.append(AIMessage(content=response_content))
 
         action_data = extract_json_from_text(response_content)
         if action_data is None:
             self.logger.log_error(f"No valid JSON found in response {response_content}")
             action_data = {"action": "get_game_state", "parameters": {}}
-
-        self.logger.log_answered(response_content)
-
-        try:
-            decided = action_data.get("action", "unknown")
-            self.game_client.agent_update_last(f"Action decided: {decided}", "success")
-        except Exception:
-            pass
 
         return {"last_action": json.dumps(action_data), "messages": messages}
 
