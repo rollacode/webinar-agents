@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any
 
 from .game_client import GameClient
 
@@ -8,7 +8,7 @@ class ActionExecutor:
     def __init__(self, game_client: GameClient) -> None:
         self.game_client = game_client
 
-    def execute(self, last_action: str) -> Dict[str, Any]:
+    def execute(self, last_action: str) -> Any:
         try:
             action_data = json.loads(last_action or "{}")
             action_type = action_data.get("action", "")
@@ -41,4 +41,4 @@ class ActionExecutor:
         except (ValueError, IndexError, json.JSONDecodeError) as e:
             result = {"success": False, "error": f"Action execution error: {str(e)}"}
 
-        return {"action_result": result}
+        return result

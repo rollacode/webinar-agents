@@ -1,20 +1,19 @@
 from typing import Any, Dict, List
 
 
-def get_system_prompt() -> str:
+def get_rules_prompt() -> str:
     return """
 You are an AI agent controlling a character in a 2D platformer game. Your goal is to navigate the level and reach the computer (C) to complete the level.
 
 GAME MECHANICS:
+- Like a dwarf fortress but platformer game
 - You can move on platforms # and climb ladders L
 - You can move multiple steps in one direction (1-10 steps)
 - Movement directions: up, down, left, right
-- You can only move to valid positions (on platforms # or ladders L)
+- You can only move to valid positions (on platforms (#) left right and on ladders (L) and up down )
 
 LEVEL OBJECTIVES:
 1. Find and reach the computer (C) to complete the level
-2. Use buttons if available to activate bridges
-3. Switch between agents if there are multiple agents available
 
 AVAILABLE ACTIONS:
 - multi_move: Move multiple steps in one direction
@@ -87,11 +86,11 @@ def build_decision_prompt(game_data: Dict[str, Any], level_data: Dict[str, Any])
         computer_pos_str = "Not found"
 
     return f"""
-<SYSTEM_PROMPT>
-{get_system_prompt()}
-</SYSTEM_PROMPT>
+<GAME_RULES>
+{get_rules_prompt()}
+</GAME_RULES>
 
->GAME STATE>
+<GAME_STATE>
 - Current position: {converted_agent_position_str}
 - Computer position: {computer_pos_str}
 - Active agent: {game_data.get("activeAgent", 0)}
@@ -102,6 +101,14 @@ def build_decision_prompt(game_data: Dict[str, Any], level_data: Dict[str, Any])
 <HINT>
     You can make multiple steps at ones in one direction.
     On ladders you need to move 1 step more up to be aligned with the platform to move left and right then.
+
+    It would be esier for you to imagine lieve like so 
+    E E X E E E E L E E E E
+    ^ ^ ^ ^ ^ ^ ^ ^
+    0 1 2 3 4 5 6 7 8 ...
+
+    to count amount of setps, or you could write the same thing vertically and count amount of steps vertically as well
+    you are buildting pat to pc you are not able to clumb by E empty spaces only by ladders
 </HINT>
 
 <LEVEL_MAP>
@@ -145,14 +152,41 @@ J means same as X but you are on Computer.
   plan your path and keep in mind that you can move multiple steps at once.
   you may use bulletpoints to describe your idea
 
+  Check that Y axix is also aligned with the ladder you are climbing to reach the pc, in other case you will not ba able to move up or down.
+
   PICK ONLY ONE LADDER TO CLIMB AT A TIME! JUST GO UP AND UP TO THE PC IF IT IS ABOVE YOU!
 </COORDINATES_FORMAT>
+
+<EXAMPLE_RESPONSE_FORMAT>
+Explain level layout:
+explayin how you see it, and how you will use it to reach the pc.
+the main ideo of the level that you have lines of text that represents rows of the level
+you could move up up or down those rows only if you are on ladder
+
+example :
+ELEEEEE
+ELEEEEE
+######L
+EEEEEEL
+EXEEEEL < ladder
+#######
+
+you need to go to closed ladder where i marked < ladder
+you cant reach ladder that located one step right because you have empty space rows there.
+
+Plan how to reach the computer:
+...
+
+Next action
+try to count mathematically how many steps you need to make for this step that you are going to do.
+
+<EXAMPLE_RESPOSE_FORMAT>
 """
 
 
 def build_verify_action_prompt() -> str:
     return """
-From everything that you said in previous messages, verify that the action is possible to execute.
+From everything that you said in previous messages, verify and execute the action.
 Return only JSON object with action and parameters.
 
 <EXAMPLE_RESPONSE>
@@ -167,9 +201,11 @@ multi_move[right] means you can do {{"action": "multi_move", "parameters": {{"di
 
 decide multiple steps at once if possible it will be better for you.
 
-PICK ONLY ONE LADDER TO CLIMB AT A TIME! JUST GO UP AND UP TO THE PC IF IT IS ABOVE YOU!
 Check previous steps and try to avoid repeating them, means if you moved right 1 time and then left 1 time, 
 it's a cycle and you need to think how to break it with other actions, or with some plan of action that will lead you to pc
+but anyway last decisions are more preffered than previous ones, use previous only to check and break cycles
+ITs ok to move on E empty spaces to get to pc or ladders to climb up and down, but still check where is the pc, if it's up you need clumb up and if it's down you need clumb down.
 
+ALWAYS PICK AN ACTION DO NOT STUCK WITH action: null or action: "", you are DISCOVERER!
 JSON ONLY!
 """

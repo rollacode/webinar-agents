@@ -20,9 +20,7 @@ from agents.game_client import GameClient
 from agents.llm_service import LLMService
 from agents.prompts import (
     build_decision_prompt,
-    build_level_prompt,
     build_verify_action_prompt,
-    get_system_prompt,
 )
 from agents.utils import extract_json_from_text
 
@@ -36,13 +34,16 @@ class LLMStudioModel(Enum):
     GPT_OSS = "openai/gpt-oss-20b"
 
 
-MAX_RECURSION_LIMIT = 500
-MODEL = "gpt-5-nano-2025-08-07"
-TEMPERATURE = 1
 USE_LLM_STUDIO = True
-LLM_STUDIO_BASE_URL = os.getenv("LLM_STUDIO_BASE_URL", "http://192.168.1.183:1234")
-LLM_STUDIO_MODEL = os.getenv("LLM_STUDIO_MODEL", LLMStudioModel.GPT_OSS.value)
-CONVERSATION_HISTORY_LENGTH = 5
+LLM_STUDIO_BASE_URL = "http://192.168.1.183:1234"
+LLM_STUDIO_MODEL = LLMStudioModel.GPT_OSS.value
+MODEL = "gpt-5-nano-2025-08-07"
+
+TEMPERATURE = 1
+
+MAX_RECURSION_LIMIT = 500
+
+CONTEXT_HISTORY_LENGTH = 7
 
 
 class SimpleAgentState(TypedDict):
@@ -50,7 +51,6 @@ class SimpleAgentState(TypedDict):
     game_data: Dict[str, Any]
     level_data: Dict[str, Any]
     last_action: str
-    action_result: Dict[str, Any]
     current_objective: str
     turn_count: int
     should_stop: bool
@@ -79,7 +79,6 @@ class SimpleAgent:
             )
         self.should_stop = False
 
-        # Services
         self.llm_service = LLMService(
             llm=self.llm,
             use_llm_studio=USE_LLM_STUDIO,
@@ -89,7 +88,6 @@ class SimpleAgent:
         self.action_executor = ActionExecutor(self.game_client)
 
         self.graph = self._create_graph()
-        self.system_prompt = get_system_prompt()
 
     async def run(self) -> None:
         """Run the agent until completion or max turns reached."""
@@ -113,7 +111,6 @@ class SimpleAgent:
             "game_data": {},
             "level_data": {},
             "last_action": "",
-            "action_result": {},
             "current_objective": "explore_and_find_computer",
             "turn_count": 0,
             "should_stop": False,
@@ -128,7 +125,6 @@ class SimpleAgent:
             {
                 "final_objective": final_state["current_objective"],
                 "final_action": final_state["last_action"],
-                "final_result": final_state["action_result"],
                 "total_turns": final_state["turn_count"],
             },
         )
@@ -144,9 +140,6 @@ class SimpleAgent:
         """Stop the agent."""
         self.should_stop = True
 
-    def _create_system_prompt(self) -> str:
-        return get_system_prompt()
-
     def _create_graph(self) -> Any:
         """Create the LangGraph state graph for the simple agent."""
         builder = StateGraph(SimpleAgentState)
@@ -156,7 +149,6 @@ class SimpleAgent:
         builder.add_node("analyze_situation", self._analyze_situation)
         builder.add_node("decide_action", self._decide_action)
         builder.add_node("verify_action", self._verify_action)
-        builder.add_node("execute_action", self._execute_action)
         builder.add_node("evaluate_result", self._evaluate_result)
 
         # Edges
@@ -164,8 +156,7 @@ class SimpleAgent:
         builder.add_edge("initialize", "analyze_situation")
         builder.add_edge("analyze_situation", "decide_action")
         builder.add_edge("decide_action", "verify_action")
-        builder.add_edge("verify_action", "execute_action")
-        builder.add_edge("execute_action", "evaluate_result")
+        builder.add_edge("verify_action", "evaluate_result")
         builder.add_conditional_edges(
             "evaluate_result",
             self._should_continue,
@@ -183,14 +174,7 @@ class SimpleAgent:
             else {}
         )
 
-        level_data = build_level_prompt(level_data_dict)
-
-        messages = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=level_data),
-        ]
-
-        return {"messages": messages, "level_data": level_data_dict}
+        return {"level_data": level_data_dict}
 
     async def _analyze_situation(self, state: SimpleAgentState) -> Dict[str, Any]:
         """Analyze the current game situation."""
@@ -201,15 +185,16 @@ class SimpleAgent:
         """Decide what action to take based on current situation and LLM."""
         game_data = state.get("game_data", {})
         level_data = state.get("level_data", {})
-        decision_prompt = build_decision_prompt(game_data, level_data)
         messages = state.get("messages", [])
 
+        decision_prompt = build_decision_prompt(game_data, level_data)
         messages.append(HumanMessage(content=decision_prompt))
-
         self.logger.log_sent(decision_prompt)
         self.game_client.agent_add_message("Thinking about next decision...", "action")
 
         response_content: str = ""
+        # Took only last message to get clear understanding about the current
+        # state only, and not all the history.
         last_messages = messages[-1:]
 
         for delta in self.llm_service.stream_completion(
@@ -226,15 +211,16 @@ class SimpleAgent:
 
     async def _verify_action(self, state: SimpleAgentState) -> Dict[str, Any]:
         """Verify the decided action."""
-
-        verify_action_prompt = build_verify_action_prompt()
         messages = state.get("messages", [])
 
+        verify_action_prompt = build_verify_action_prompt()
         messages.append(HumanMessage(content=verify_action_prompt))
         self.logger.log_sent(verify_action_prompt)
         self.game_client.agent_add_message("Verifying decision...", "action")
 
-        last_messages = messages[-CONVERSATION_HISTORY_LENGTH:]
+        # Taking more messages here to get more context about the previous steps
+        # to avoid repeating the same actions.
+        last_messages = messages[-CONTEXT_HISTORY_LENGTH:]
         response_content: str = ""
         for delta in self.llm_service.stream_completion(
             last_messages, temperature=TEMPERATURE
@@ -254,15 +240,13 @@ class SimpleAgent:
 
         return {"last_action": json.dumps(action_data), "messages": messages}
 
-    async def _execute_action(self, state: SimpleAgentState) -> Dict[str, Any]:
-        """Execute the decided action."""
-        return self.action_executor.execute(state.get("last_action", "{}"))
-
     async def _evaluate_result(self, state: SimpleAgentState) -> Dict[str, Any]:
         """Evaluate the result of the action."""
-        result = state.get("action_result", {})
+        last_action = state.get("last_action", "{}")
         current_objective = state.get("current_objective", "explore_and_find_computer")
         turn_count = state.get("turn_count", 0) + 1
+
+        result = self.action_executor.execute(last_action)
 
         if result.get("success"):
             data = result.get("data", {})
